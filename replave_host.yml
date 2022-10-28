@@ -1,0 +1,31 @@
+---
+    - name: swapping hosts file
+      remote_user: kwikonnect
+      become: true
+      serial: 5
+      hosts: '{{ target }}'
+      vars:
+
+      tasks:
+        - name: checking if file is present
+          file:
+            path: /etc/hosts
+            mode: '0644' 
+            owner: root  
+            group: root
+        - name: replace localhost entry
+          replace:
+            dest: /etc/hosts
+            regexp: '.*paylater.mobikwik.com'
+            replace: '#10.10.10.72 paylater.mobikwik.com'
+        #  lineinfile:
+        #    path: /etc/hosts
+        #    regexp: '10.10.10.72  paylater.mobikwik.com'
+        #    line: '#10.10.10.72  paylater.mobikwik.com'
+            mode: '0644'
+            owner: root
+            group: root
+        - name: confirming the entry
+          shell: cat /etc/hosts | grep paylater.mobikwik.com 
+          register: output
+        - debug: msg="{{ output.stdout }}"
