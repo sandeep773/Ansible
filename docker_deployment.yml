@@ -1,0 +1,90 @@
+---
+- name: deploying recharge deployment
+  remote_user: kwikonnect
+  become: yes
+  serial: 1
+  hosts: '{{ target }}'
+  vars:
+    mobikwik_home: /data/{{container_name}}
+    git_repo: git@github.com:Mobikwik/sysops.git
+    container_name: '{{ container }}'
+    war_name: '{{ war }}'
+    container_port: '{{ port }}'
+
+  tasks: 
+     - name: Create config directories
+       file: 
+         path: "{{ mobikwik_home }}_{{ item }}"
+         mode: '0775' 
+         owner: kwikonnect  
+         group: devops 
+         state: directory
+       with_items:
+         - env
+         - logs
+
+     - name: Property update
+       git: repo='{{git_repo}}' dest='{{mobikwik_home}}_env' version='docker-env-recharge-dr' force=yes
+       become_user: kwikonnect
+     
+     - name: Copy the war file.
+       copy: 
+         src: "{{ war_path }}/{{ war_name }}"
+         dest: /data/{{container_name}}_env/{{feature}}
+         owner: kwikonnect
+         mode: 777 
+    
+     - name: Removing existing application container
+       docker_container:
+         name: "{{ container_name }}"
+         state: absent
+       ignore_errors: yes
+
+     - pause: seconds=15
+
+     - name: Starting application container 
+       docker_container:
+           name: "{{ container_name }}"
+           image: mbkdocker/tomcat-8-mbkrecharge-new_16june2022   
+           state: started
+           etc_hosts:
+                evdapps.ttsl.com: 172.17.4.154
+                tptprod.sundirect.in: 10.201.21.35
+                utibawebservices.mtsindia.in: 10.132.249.16
+                www.mobikwik.com: 10.10.8.26
+                mobikwik.com: 10.10.8.26
+                www.zaakpay.com: 10.10.9.26
+                api.zaakpay.com: 10.10.9.27
+                api2.zaakpay.com: 10.10.9.28
+                mbkapi.zaakpay.com: 10.10.9.29
+                newmbkapi.zaakpay.com: 10.10.9.29
+                qtlwebservice: 202.164.33.157
+                qtlwebservice.infotelconnect.com: 202.164.33.157
+                impsbc.icicibank.co.in: 103.87.40.11 
+                qtlproducts.infotelconnect.com: 202.164.33.157
+                admin.mobikwik.com: 10.10.8.34
+                promotions.mobikwik.com: 10.10.8.37
+                b2b.mobikwik.com: 10.10.8.60
+                
+                
+                 
+           ports:
+              - " {{ container_port }}:8080"
+           env:
+               CONTAINER_NAME: "{{ container_name }}"
+               FEATURE_NAME: "{{ feature }}"
+               MODULE_NAME: "{{ feature }}"
+               WAR_NAME: "{{ war_name }}"
+               HOST_NAME: "{{ ansible_hostname }}"
+           volumes:
+              - /data/{{container_name}}_env:/var/install/mobikwik
+              - /data/{{container_name}}_logs:/opt/tomcat8/logs
+              - /data/yjp-2015-build-15082:/opt/tomcat8/yjp-2015-build-15082
+              - /data/newrelic:/opt/tomcat8/newrelic
+     
+     - pause: seconds=60
+
+     - name: Health check
+       uri:
+         url: http://localhost:{{ container_port }}/recharge/v1/ping
+         timeout: 300
