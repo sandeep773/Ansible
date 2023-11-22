@@ -1,0 +1,26 @@
+- name: copy file
+  hosts: "{{target}}"
+  tasks:
+    - name: copying file with playbook
+      become: true
+      copy:
+        src: "{{ item }}"
+        # src: "/data/jenkins_home/workspace/nginx-nonpci/non-pci/Deploy/Nginx/conf.d/"
+        dest: /etc/nginx/conf.d/
+        # remote_src: yes
+        owner: root
+        group: root
+        mode: 0755
+      with_fileglob:
+        - "/data/jenkins_home/workspace/nginx-appapi/appapi/Deploy/Nginx/conf.d/*"
+      
+  
+    - name: store commnd output
+      command: '/sbin/nginx  -t'
+      register: httpdcommand_out
+      become: true
+    - debug: var=httpdcommand_out.stdout_lines
+    
+    - command: systemctl reload nginx.service
+      when: httpdcommand_out.stderr.find('ok') != -1
+      become: yes
