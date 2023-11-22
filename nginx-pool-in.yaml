@@ -1,0 +1,34 @@
+---
+- name: Putting traffic on server
+  remote_user: kwikonnect
+  become: yes
+  serial: 2
+  hosts: '{{ hosts }}' 
+  vars:
+    nginx_conf: '/etc/nginx/conf.d/{{ nginx_file }}'
+    server: '{{ target }}'
+
+  tasks:
+    - name: checking the conf file
+      file:
+        path: "{{ nginx_conf }}"
+        mode: '0644' 
+        owner: root  
+        group: root
+
+    - name: pool in server
+      replace:
+        dest: "{{ nginx_conf }}"
+        regexp: '#server {{ server }}'
+        replace: '        server {{ server }}'
+
+    - name: confirming the entry
+      shell: cat "{{ nginx_conf }}" | grep "{{ server }}" 
+      register: output
+    - debug: msg="{{ output.stdout }}"
+
+    - name: reloading nginx service 
+      service:
+        name: nginx
+        state: reloaded
+
