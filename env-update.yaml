@@ -1,0 +1,34 @@
+--- 
+- hosts: "{{target}}"
+  become: yes 
+  vars: 
+    local_path: "{{ local_path }}"
+    remote_path: "{{ remote_path }}"
+    work_dir: "{{ workdir }}"
+  
+  tasks:
+  - name: "Variable Validation"
+    fail:
+      msg: "Kindly Pass local Env file path."
+    when: "local_path is undefined"
+  - name: "Variable Validation"
+    fail:
+      msg: "Kindly pass remote Env file path."
+    when: "remote_path is undefined"
+  - name: "Copy ENV file"
+    copy: 
+      dest: "{{ remote_path }}"
+      force: yes
+      src: "{{ local_path }}/env.properties"
+    become: yes
+  - name: "Change OwnerShip To tomcat"
+    file:
+      #path: "{{ remote_path }}/env.properties"
+      path: "{{ remote_path }}"
+      state: file
+      #recurse: yes
+      owner: tomcat
+      group: tomcat
+      mode: 0755
+    become: yes
+
