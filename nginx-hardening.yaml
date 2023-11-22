@@ -1,0 +1,68 @@
+---
+#- name: Harden Nginx web server
+- hosts: '{{servers}}'
+  become: yes
+
+  tasks:
+    - name: Install nginx
+      shell: "yum install nginx -y"
+        
+    - name: Enable nginx service
+      service:
+        name: nginx
+        state: started
+        enabled: yes  
+    
+    - name: Remove default server configuration
+      file:
+          path: /etc/nginx/conf.d/default.conf
+          state: absent 
+    
+    - name: Backup default nginx.conf file
+      copy:
+        src: /etc/nginx/nginx.conf
+        dest: /etc/nginx/nginx.conf.{{ ansible_date_time.date }}
+        remote_src: yes
+
+    - name: copy file to remote server
+      copy:
+       src: nginx-file/nginx.conf
+       dest: /etc/nginx/    
+
+    - name: Create directory for certificate
+      file:
+       path: /etc/ssl/ssl-certs/certs/
+       state: directory
+       mode: '0755'    
+    
+    - name: copy cert file to remote server
+      copy:
+       src: nginx-file/mobikwik.crt
+       dest: /etc/ssl/ssl-certs/certs
+       mode: '0644'  
+
+    - name: copy cert key file to remote server
+      copy:
+       src: nginx-file/mobikwik.key
+       dest: /etc/ssl/ssl-certs/certs
+       mode: '0600'
+
+    - command: nginx -t
+      register: nginxcommand_out
+      become: yes
+
+    - debug: msg="nginx -t Output  {{ nginxcommand_out.stderr }}"
+
+    - name: restart nginx
+      command: systemctl restart nginx.service
+      when: ( nginxcommand_out.stderr.find('syntax is OK') != -1 ) or
+            ( nginxcommand_out.stderr.find('syntax is ok') != -1 )
+      become: yes
+
+    - name: Verify that nginx is running and listening on port 80 and 443
+      shell: netstat -tunlp|grep -i nginx|egrep "443|80"
+      register: result  
+
+    - debug: msg="{{ result.stdout_lines }}"
+    #- debug: msg="upload original cert and key in directory /etc/ssl/ssl-certs/certs and edit filename in nginx.conf"
+
