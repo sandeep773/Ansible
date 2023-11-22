@@ -1,0 +1,91 @@
+---
+#- name: Harden Nginx web server
+- hosts: '{{servers}}'
+  become: yes
+
+  vars:
+    # Set recommended secure SSL protocols and ciphers
+    nginx_conf_path: /etc/nginx/nginx.conf
+    nginx_ssl_protocols: "TLSv1.2 TLSv1.3"
+    nginx_ssl_ciphers: "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH"
+
+  tasks:
+    - name: Install nginx
+      shell: "yum install nginx -y"
+      #yum:
+      #   name: nginx
+      #   state: present 
+    
+    - name: Enable nginx service
+      service:
+        name: nginx
+        state: started
+        enabled: yes  
+    
+    - name: Remove default server configuration
+      file:
+          path: /etc/nginx/conf.d/default.conf
+          state: absent 
+    
+    - name: Disable Nginx server signature
+      lineinfile:
+         path: "{{ nginx_conf_path }}"
+         regexp: "^\\s*server_tokens\\s*"
+         line: "server_tokens off;"  
+    
+    - name: Enable nginx gzip compression
+      lineinfile:
+          dest: "{{ nginx_conf_path }}"
+          regexp: "^#[[:space:]]*gzip_types"
+          line: "    gzip_types text/plain text/css application/javascript application/x-javascript text/xml application/xml application/xml+rss text/javascript application/vnd.ms-fontobject application/x-font-ttf font/opentype image/svg+xml;"
+    
+    - name: Enable nginx gzip compression
+      lineinfile:
+          dest: "{{ nginx_conf_path }}"
+          regexp: "^#[[:space:]]*gzip"
+          line: "    gzip on;"
+  
+  
+    - name: Restrict allowed HTTP methods
+      lineinfile:
+          path: "{{ nginx_conf_path }}"
+          regexp: "^\\s*#?\\s*limit_except\\s*POST\\s*{"
+          line: "    deny all;"  
+    
+    - name: Enable Nginx SSL settings
+      lineinfile:
+          path: "{{ nginx_conf_path }}"
+          regexp: "^\\s*#?\\s*ssl_protocols\\s*"
+          line: "ssl_protocols {{ nginx_ssl_protocols }};"
+    
+    - name: Enable Nginx cipher settings
+      lineinfile:
+          path: "{{ nginx_conf_path }}"
+          regexp: "^\\s*#?\\s*ssl_ciphers\\s*"
+          line: "ssl_ciphers {{ nginx_ssl_ciphers }};"               
+    
+    - name: Configure Nginx security headers
+      copy:
+          dest: "/etc/nginx/conf.d/security.conf"
+          mode: 0644
+          content: |
+            add_header X-Frame-Options "SAMEORIGIN" always;
+            add_header X-XSS-Protection "1; mode=block" always;
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header Referrer-Policy "no-referrer-when-downgrade" always;
+            add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    
+    - command: nginx -t
+      register: nginxcommand_out
+      become: yes
+
+    - debug: msg="nginx -t Output  {{ nginxcommand_out.stderr }}"
+
+    - command: systemctl restart nginx.service
+      when: nginxcommand_out.stderr.find('syntax is OK') != -1
+      become: yes
+
+#    - name: restart nginx
+#     service:
+#          name: nginx
+#          state: restarted
